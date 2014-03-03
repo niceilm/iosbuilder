@@ -6,7 +6,7 @@
     "email" : "niceilm@naver.com",
     "url" : "http://niceilm.net"
   },
-  "version" : "0.0.6",
+  "version" : "0.0.7",
   "bin" : "./bin/iosbuilder",
   "dependencies" : {
     "commander" : "~2.1.0",
