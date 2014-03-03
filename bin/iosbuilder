@@ -1,0 +1,240 @@
+#!/usr/bin/env node
+var CONFIG_FILE_NAME = 'iosbuilder.json';
+var TEMPLATE_FILE_NAME = '../template/template.hbs';
+
+var fs = require('fs');
+var url = require('url');
+var util = require('util');
+var spawn = require('child_process').spawn;
+var exec = require('child_process').exec;
+
+var program = require('commander');
+var nconf = require('nconf');
+var prompt = require('prompt');
+var path = require('path');
+var handlebars = require('handlebars');
+var request = require('request');
+
+var pkg = require('../package.json');
+
+var rxSdkName = /-platform (.*?) /m;
+var rxFolderPath = /mkdir -p (.*)/m;
+var rxCodeSignIdentity = /Using code signing identity "(.*?)"/m;
+var promptSchema = {
+  properties : {
+    workspace : {
+      description : 'xcode workspace',
+      message : 'must write workspace',
+      type : 'string',
+      required : true
+    },
+    schema : {
+      description : 'xcode schema',
+      message : 'xcode build schema',
+      type : 'string',
+      required : true
+    },
+    provisioning : {
+      description : 'provisioning certificate file name',
+      message : 'xcode archive provisioning certificate',
+      type : 'string',
+      required : true
+    },
+    codeSignIdentity : {
+      description : 'provisioning certificate file name',
+      message : 'xcode archive provisioning certificate',
+      type : 'string',
+      required : true
+    },
+    sdkName : {
+      description : 'sdkName',
+      type : 'string',
+      default : 'iphoneos'
+    },
+    output : {
+      description : 'output name (ex : some.ipa, some.plist)',
+      type : 'string',
+      default : 'test'
+    },
+    uploadUrl : {
+      description : 'upload url',
+      type : 'string'
+    },
+    downloadIpaUrl : {
+      description : 'downloadIpaUrl',
+      type : 'string'
+    },
+    bundleIdentifier : {
+      description : 'bundleIdentifier',
+      type : 'string'
+    },
+    bundleVersion : {
+      description : 'bundleVersion',
+      type : 'string'
+    },
+    subtitle : {
+      description : 'subtitle',
+      type : 'string'
+    },
+    displayImageUrl : {
+      description : 'displayImageUrl',
+      type : 'string'
+    },
+    fullSizeImageUrl : {
+      description : 'fullSizeImageUrl',
+      type : 'string'
+    }
+  }
+};
+
+var currentPath,
+  buildPath;
+
+exec('pwd', function(err, stdout, stderr) {
+  currentPath = stdout.replace('\n', '');
+
+  program
+    .description('ios build and deploy')
+    .option('-c, --config <config>', 'specify config file', CONFIG_FILE_NAME)
+    .option('-w, --workspace <workspace>', promptSchema.properties.workspace.description)
+    .option('-s, --schema <schema>', promptSchema.properties.schema.description)
+    .option('-p, --provisioning <provisioning>', promptSchema.properties.provisioning.description)
+    .option('-o, --output [output]', promptSchema.properties.output.description)
+    .version(pkg.version);
+
+  program
+    .command('init')
+    .description(util.format('make %s', CONFIG_FILE_NAME))
+    .option('-c, --config <config>', 'specify config file', CONFIG_FILE_NAME)
+    .action(function(options) {
+      prompt.start({message : 'iosbuilder'});
+      prompt.get(promptSchema, function(err, result) {
+        if(err) {
+          console.log('\nbye~');
+          return;
+        }
+        nconf.file(path.resolve(currentPath, options.config));
+        for(var key in result) {
+          nconf.set(key, result[key]);
+        }
+        nconf.save(function() {
+          console.log(util.format('save to %s', options.config));
+        });
+      });
+    });
+
+  program
+    .command('*')
+    .action(function() {
+      program.help();
+    });
+
+  program.parse(process.argv);
+
+  if(program.args.length == 0) {
+    loadConfing(buildCode);
+  }
+
+});
+
+function loadConfing(callback) {
+  var configPath = path.resolve(currentPath, program.config);
+
+  if(!fs.existsSync(configPath)) {
+    console.log('$iosbuilder init first');
+    return false;
+  }
+
+  nconf.file(path.resolve(currentPath, program.config));
+  nconf.load(function(err) {
+    if(err) {
+      return;
+    }
+    var overrideOptions = ['workspace', 'schema', 'provisioning', 'output', 'uploadUrl', 'downloadUrl'];
+    for(var key in program) {
+      if(overrideOptions.indexOf(key) > -1) {
+        nconf.set(key, program[key]);
+      }
+    }
+    nconf.set('output', (nconf.get('output') || nconf.get('schema')));
+    if(typeof callback == 'function') {
+      callback();
+    }
+  });
+}
+
+function buildCode() {
+  console.log('build workspace');
+  var xcodebuild = spawn('xcodebuild', [
+    '-workspace', nconf.get('workspace'),
+    '-scheme', nconf.get('schema'),
+    'clean', 'build'
+  ]);
+
+  xcodebuild.stdout.on('data', function(data) {
+    output(data);
+    findValue(data + '');
+  });
+
+  xcodebuild.on('close', packageApplication);
+}
+
+function packageApplication(code) {
+  console.log('make ipa file');
+  var outputPath = path.resolve(currentPath, nconf.get('output') + '.ipa');
+
+  var xcrun = spawn('xcrun', [
+    '-sdk', nconf.get('sdkName'),
+    'PackageApplication',
+    '-v', buildPath,
+    '-o', outputPath,
+    '-sign', nconf.get('codeSignIdentity'),
+    '-embed', path.resolve(currentPath, nconf.get('provisioning') || ''),
+  ]);
+  xcrun.stdout.on('data', output);
+  xcrun.stderr.on('data', output);
+  xcrun.on('close', makePlist);
+}
+
+function makePlist() {
+  console.log('make plist');
+  var outputPath = path.resolve(currentPath, nconf.get('output') + '.plist');
+  var source = fs.readFileSync(path.resolve(__dirname, TEMPLATE_FILE_NAME));
+  var template = handlebars.compile(source + '');
+  var downloadIpaUrl = url.resolve(nconf.get('downloadIpaUrl') + (nconf.get('downloadIpaUrl').match(/\/$/) ? '' : '/'), nconf.get('output') + '.ipa');
+  var results = template({
+    'downloadIpaUrl' : downloadIpaUrl,
+    'bundleIdentifier' : nconf.get('bundleIdentifier'),
+    'bundleVersion' : nconf.get('bundleVersion'),
+    'title' : nconf.get('title') || nconf.get('output'),
+    'fullSizeImageUrl' : nconf.get('fullSizeImageUrl'),
+    'displayImageUrl' : nconf.get('displayImageUrl'),
+    'subtitle' : nconf.get('subtitle')
+  });
+  fs.writeFileSync(outputPath, results);
+  uploadFile();
+}
+
+function uploadFile() {
+  var r = request.post(nconf.get('uploadUrl'), function(err, res, body) {
+    if(err) {
+      console.log(err);
+    } else {
+      console.log('upload complete');
+    }
+  });
+  var form = r.form()
+  form.append('file', fs.createReadStream(path.resolve(currentPath, nconf.get('output') + '.ipa')));
+  form.append('file', fs.createReadStream(path.resolve(currentPath, nconf.get('output') + '.plist')));
+}
+
+function findValue(data) {
+  if(!buildPath && rxFolderPath.test(data)) {
+    buildPath = rxFolderPath.exec(data)[1];
+    //      console.log(buildPath);
+  }
+}
+
+function output(data) {
+  console.log(data + '');
+}
