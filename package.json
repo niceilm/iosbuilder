@@ -1,8 +1,12 @@
 {
   "name" : "iosbuilder",
   "description" : "ios builder and adhoc distributor",
-  "author" : "niceilm <niceilm@naver.com>",
-  "version" : "0.0.4",
+  "author" : {
+    "name" : "niceilm",
+    "email" : "niceilm@naver.com",
+    "url" : "http://niceilm.net"
+  },
+  "version" : "0.0.6",
   "bin" : "./bin/iosbuilder",
   "dependencies" : {
     "commander" : "~2.1.0",
@@ -12,5 +16,21 @@
     "request" : "~2.34.0"
   },
   "devDependencies" : {},
-  "engine" : "node >= 0.6.6"
+  "repository" : {
+    "type" : "git",
+    "url" : "https://github.com/niceilm/iosbuilder.git"
+  },
+  "readmeFilename" : "README.md",
+  "engine" : "node >= 0.6.6",
+  "bugs" : {
+    "url" : "https://github.com/niceilm/iosbuilder/issues"
+  },
+  "keywords" : [
+    "ios",
+    "build",
+    "deploy",
+    "cli",
+    "command"
+  ],
+  "license" : "MIT"
 }
