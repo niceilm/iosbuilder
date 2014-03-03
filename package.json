@@ -1,12 +1,12 @@
 {
   "name" : "iosbuilder",
+  "version" : "0.0.8",
   "description" : "ios builder and adhoc distributor",
   "author" : {
     "name" : "niceilm",
     "email" : "niceilm@naver.com",
     "url" : "http://niceilm.net"
   },
-  "version" : "0.0.7",
   "bin" : "./bin/iosbuilder",
   "dependencies" : {
     "commander" : "~2.1.0",

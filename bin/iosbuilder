@@ -83,6 +83,11 @@ var promptSchema = {
     fullSizeImageUrl : {
       description : 'fullSizeImageUrl',
       type : 'string'
+    },
+    configFilePath : {
+      description : 'save config file name',
+      type : 'string',
+      default : CONFIG_FILE_NAME
     }
   }
 };
@@ -105,7 +110,6 @@ exec('pwd', function(err, stdout, stderr) {
   program
     .command('init')
     .description(util.format('make %s', CONFIG_FILE_NAME))
-    .option('-c, --config <config>', 'specify config file', CONFIG_FILE_NAME)
     .action(function(options) {
       prompt.start({message : 'iosbuilder'});
       prompt.get(promptSchema, function(err, result) {
@@ -113,12 +117,12 @@ exec('pwd', function(err, stdout, stderr) {
           console.log('\nbye~');
           return;
         }
-        nconf.file(path.resolve(currentPath, options.config));
+        nconf.file(path.resolve(currentPath, result.configFilePath));
         for(var key in result) {
           nconf.set(key, result[key]);
         }
         nconf.save(function() {
-          console.log(util.format('save to %s', options.config));
+          console.log(util.format('save to %s', result.configFilePath));
         });
       });
     });
