@@ -36,13 +36,13 @@ var promptSchema = {
     },
     provisioning : {
       description : 'provisioning certificate file name',
-      message : 'xcode archive provisioning certificate',
+      message : 'must write your provisioning certificate',
       type : 'string',
       required : true
     },
     codeSignIdentity : {
-      description : 'provisioning certificate file name',
-      message : 'xcode archive provisioning certificate',
+      description : 'code sign identity',
+      message : 'must write your code sign identity',
       type : 'string',
       required : true
     },
